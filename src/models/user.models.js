@@ -64,7 +64,7 @@ userSchema.methods.checkPassword=async function(password){
 }
 
 
-userSchema.methods.generateAccessTOken=function(){
+userSchema.methods.generateAccessToken=function(){
     return jwt.sign({
         _id:this._id,
         email:this.email,
