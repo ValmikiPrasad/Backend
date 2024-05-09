@@ -104,66 +104,103 @@ const registerUser = async (req, res) => {
 // login controller
 
 const loginUser = async (req, res) => {
-  try{
+  try {
+    const { username, email, password } = req.body;
 
-  
-  const { username, email, password } = req.body;
+    if (!username && !email) {
+      res.status(400).json({ message: "username or email required" });
+    }
+    const user = await User.findOne({
+      $or: [{ email }, { username }],
+    });
+    //  const user = await User.findOne({username});
+    if (!user) {
+      res.status(404).json({ msg: "user not find" });
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      res.status(400).json({ msg: "Invalid credentials" });
+    }
+    const { accessToken, refreshToken } =
+      await generateAccessTokenandRefreshToken(user._id);
 
-  if (!username && !email) {
-    res.status(400).json({message:"username or email required" });
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    // setting tokens in cookie
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json({
+        data: loggedInUser,
+        accessToken,
+        refreshToken,
+        message: "User successfully logged in",
+      });
+  } catch (err) {
+    console.log("error");
+    res.status(500).json("something went wrong");
   }
-  const user = await User.findOne({
-    $or: [{ email }, { username }],
+};
+
+const logoutUser = async (req, res) => {
+  await User.findByIdAndUpdate(req.user._id, {
+    $set: {
+      refreshToken: undefined,
+    },
   });
-  //  const user = await User.findOne({username});
-  if (!user) {
-    res.status(404).json({ msg: "user not find" });
-  }
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) {
-    res.status(400).json({ msg: "Invalid credentials" });
-  }
-  const { accessToken, refreshToken } =await generateAccessTokenandRefreshToken(user._id);
-
-  const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
-
-  // setting tokens in cookie
   const options = {
     httpOnly: true,
     secure: true,
   };
   res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json({
-      data: loggedInUser,
-      accessToken,
-      refreshToken,
-      message: "User successfully logged in",
-    });
-  }
-  catch(err){
-    console.log("error")
-    res.status(500).json("something went wrong")
-  }
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json("User logged out successfully");
 };
 
+const refreshAccessToken = async (req, res) => {
+  const incomingRefreshToken = req.cookie.refreshToken;
+  if (!incomingRefreshToken) {
+    res.status(401).json({ msg: "Unauthorised access" });
+  }
 
-const logoutUser=async(req,res)=>{
-  await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      $set:{
-        refreshToken:undefined
-      }
-    }
-  )
+  const decodedToken = jwt.verify(
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET
+  );
+
+  const user = await User.findById(decodedToken._id);
+  if (!user) {
+    res.status(401).json({ msg: "User Not found,invalid token" });
+  }
+  if (incomingRefreshToken != user.refreshToken) {
+    res.status(401).json({ msg: "Invalid refreshToken" });
+  }
+
+  const { accessToken, refreshToken } =
+    await generateAccessTokenandRefreshToken(user._id);
+
   const options = {
     httpOnly: true,
     secure: true,
   };
-  res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json("User logged out successfully")
-}
 
-export { registerUser, loginUser , logoutUser };
+  res
+    .status(200)
+    .cookie("accessToken", accessToken)
+    .cookie("refreshToken", refreshToken)
+    .json({
+      accessToken,
+      refreshToken,
+      msg: "TOkens updated successfully",
+    });
+};
+export { registerUser, loginUser, logoutUser,refreshAccessToken };
