@@ -169,7 +169,7 @@ const logoutUser = async (req, res) => {
 const refreshAccessToken = async (req, res) => {
   const incomingRefreshToken = req.cookie.refreshToken;
   if (!incomingRefreshToken) {
-    res.status(401).json({ msg: "Unauthorised access" });
+    res.status(401).json({ msg: "Unauthorised access!!" });
   }
 
   const decodedToken = jwt.verify(
@@ -203,4 +203,102 @@ const refreshAccessToken = async (req, res) => {
       msg: "TOkens updated successfully",
     });
 };
-export { registerUser, loginUser, logoutUser,refreshAccessToken };
+
+const changePassword = async (req, res) => {
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+  if (newPassword != confirmPassword) {
+    return res.status(400).json({ msg: "password is not matching..." });
+  }
+  const id = req.user?._id;
+  if (!id) {
+    return res.status(400).json({ msg: "log in first" });
+  }
+  const user = await User.findById(id);
+  if (!user) {
+    return res.status(400).json({ msg: "user not found " });
+  }
+  const checkPassword = await bcrypt.compare(oldPassword, user.password);
+  if (!checkPassword) {
+    return res.status(400).json({ msg: "wrong old password... " });
+  }
+  user.password = newPassword;
+  user.save();
+  return res.status(201).json({ msg: "password updated successfully..." });
+};
+
+const getCurrentUser = async (req, res) => {
+  const currentUser = await User.findById(req.user?._id);
+  return res
+    .status(201)
+    .json({ data: currentUser, msg: "user fetched successfully..." });
+};
+
+const updateAccount = async (req, res) => {
+  const { username, fullName, email } = req.body;
+  if (!username && !fullName && !email) {
+    return res
+      .status(400)
+      .json({
+        msg: "enter the value of any field in order to update the account...",
+      });
+  }
+  const user = await User.findById(req.user?._id);
+  if (!user) {
+    return res.status(400).json({ msg: "uesr not found... " });
+  }
+  if (username) {
+    user.username = username;
+  }
+  if (email) {
+    user.email = email;
+  }
+  if (email) {
+    user.email = email;
+  }
+  user.save();
+  return res.status(201).json({ msg: "Account Updated successfully..." });
+};
+
+const updateAvatar = async (req, res) => {
+  const user = await User.findById(req.user?._id);
+
+  const localAvatar = req.file?._id;
+  if (!localAvatar) {
+    return res.status(400).json({ msg: "avatar file is required..." });
+  }
+  const avtUrl = await uploadOnCloud(localAvatar);
+  if (!avtUrl.url) {
+    return res.status(501).json({ msg: "uploding failed..." });
+  }
+  user.avatar = avtUrl.url;
+  user.save();
+  return res.status(201).json({ msg: "avatar uploded successfully..." });
+};
+
+const updateCover = async (req, res) => {
+  const user = await User.findById(req.user?._id);
+
+  const localCover = req.file?._id;
+  if (!localCover) {
+    return res.status(401).json({ msg: "coverImage is required..." });
+  }
+  const cvrUrl = await uploadOnCloud(localCover);
+  if (!cvrUrl.url) {
+    return res.status(501).json({ msg: "uploding failed..." });
+  }
+  user.coverImage = cvrUrl.url;
+  user.save();
+  return res.status(201).json({ msg: "cover uploded successfully..." });
+};
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refreshAccessToken,
+  changePassword,
+  updateAccount,
+  getCurrentUser,
+  updateAvatar,
+  updateCover,
+};
